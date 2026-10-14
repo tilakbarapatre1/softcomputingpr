@@ -44,6 +44,12 @@ export interface Product {
   xyz_class: string;
   inventory_value?: number;
   is_active: boolean;
+  daily_demand?: number;
+  weekly_demand?: number;
+  monthly_demand?: number;
+  days_until_stockout?: number;
+  stockout_risk?: string;
+  overstock_risk?: string;
   suppliers?: SupplierProductBrief[];
   created_at: string;
   updated_at: string;

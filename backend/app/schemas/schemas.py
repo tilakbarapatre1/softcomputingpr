@@ -253,6 +253,7 @@ class SimulationResult(BaseModel):
     simulated_total_procurement_cost: float
     cost_difference: float
     capital_at_risk: float
+    budget_limit: Optional[float] = 200000.0
     impact_summary: str
     critical_impacted_products: List[Dict[str, Any]]
 

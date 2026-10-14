@@ -51,7 +51,7 @@ export const WhatIfSimulatorPage: React.FC = () => {
       metric: 'Procurement Requirement (₹k)',
       Baseline: Math.round(result.base_total_procurement_cost / 1000),
       Simulated: Math.round(result.simulated_total_procurement_cost / 1000),
-      Budget: Math.round(result.budget_limit / 1000)
+      Budget: Math.round(((result.budget_limit ?? budgetLimit) || 0) / 1000)
     }
   ] : [];
 

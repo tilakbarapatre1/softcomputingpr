@@ -41,7 +41,7 @@ export const DashboardPage: React.FC<{ onOpenCopilot: () => void }> = ({ onOpenC
     fetchSummary();
   }, []);
 
-  if (loading || !summary) {
+  if (loading && !summary) {
     return (
       <div className="p-8 flex flex-col items-center justify-center min-h-[60vh] gap-3">
         <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" />
@@ -49,6 +49,8 @@ export const DashboardPage: React.FC<{ onOpenCopilot: () => void }> = ({ onOpenC
       </div>
     );
   }
+
+  if (!summary) return null;
 
   // Transform health distribution for donut chart
   const healthChartData = [

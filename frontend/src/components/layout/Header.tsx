@@ -155,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div className="hidden xl:block text-left">
               <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">
-                {user?.full_name || 'Harsh Vardhan'}
+                {user?.full_name || 'Tilak Barapatre'}
               </p>
               <p className="text-[10px] text-slate-400 leading-none mt-1">
                 {user?.role || 'Admin'}
