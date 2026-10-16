@@ -171,8 +171,32 @@ def create_product(prod_in: ProductCreate, db: Session = Depends(get_db)):
         is_active=True
     )
     db.add(prod)
+    db.flush()
+
+    # Automatically attach preferred supplier quotes from active suppliers
+    suppliers = db.query(Supplier).all()
+    if suppliers:
+        for s in suppliers[:2]: # Link top suppliers
+            sp = SupplierProduct(
+                supplier_id=s.id,
+                product_id=prod.id,
+                unit_cost=prod.unit_cost,
+                lead_time_days=prod.lead_time_days or 3,
+                moq=10,
+                reliability_score=s.reliability_score or 95.0,
+                quality_score=s.quality_score or 94.0,
+                is_preferred=(s.id == suppliers[0].id)
+            )
+            db.add(sp)
+
     db.commit()
     db.refresh(prod)
+
+    # Immediately sync AI reorder recommendations if in critical or low stock
+    if prod.current_stock <= prod.reorder_point or prod.current_stock <= prod.safety_stock:
+        from app.api.procurement import sync_active_recommendations
+        sync_active_recommendations(db)
+
     return prod
 
 @router.put("/{id}")
@@ -187,6 +211,11 @@ def update_product(id: int, prod_in: ProductUpdate, db: Session = Depends(get_db
 
     db.commit()
     db.refresh(p)
+
+    if p.current_stock <= p.reorder_point or p.current_stock <= p.safety_stock:
+        from app.api.procurement import sync_active_recommendations
+        sync_active_recommendations(db)
+
     return {"status": "success", "message": "Product updated successfully", "product": p}
 
 @router.delete("/{id}")

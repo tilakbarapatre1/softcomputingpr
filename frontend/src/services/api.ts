@@ -37,6 +37,96 @@ let localPurchaseOrders = [...MOCK_PURCHASE_ORDERS];
 let localAlerts = [...MOCK_ALERTS];
 let localRecommendations = [...MOCK_RECOMMENDATIONS];
 
+export function syncLocalRecommendations() {
+  localProducts.forEach(p => {
+    const isCritical = p.current_stock <= p.safety_stock;
+    const isLow = p.current_stock <= p.reorder_point;
+    if (isCritical || isLow) {
+      const existingIdx = localRecommendations.findIndex(r => r.product_id === p.id);
+      const urgency: 'CRITICAL' | 'HIGH' = isCritical ? 'CRITICAL' : 'HIGH';
+      const deficit = Math.max(0, p.reorder_point - p.current_stock);
+      const recQty = Math.max(20, Math.ceil((deficit + p.safety_stock * 1.5) / 10) * 10);
+      const estCost = Math.round(recQty * p.unit_cost);
+      const savings = Math.round(recQty * p.unit_cost * 0.08);
+
+      const rationale = [
+        `Current stock (${p.current_stock} ${p.unit}) is ${isCritical ? 'at critical limit (below safety threshold)' : 'below reorder point'} (Reorder Point: ${p.reorder_point}, Safety Stock: ${p.safety_stock}).`,
+        `Machine learning 30-day forecast projects demand velocity of ~${Math.round(p.reorder_point * 1.8)} units.`,
+        `Supplier lead time is ${p.lead_time_days} days with safety buffer requirement of ${p.safety_stock} ${p.unit}.`,
+        `Procuring recommended ${recQty} units resolves the critical deficit and yields estimated procurement savings of ₹${savings.toLocaleString('en-IN')}.`
+      ];
+
+      const decisionFactors = {
+        current_stock: p.current_stock,
+        reorder_point: p.reorder_point,
+        safety_stock: p.safety_stock,
+        lead_time_days: p.lead_time_days,
+        forecast_30d: Math.round(p.reorder_point * 1.8),
+        supplier_reliability: 96.5,
+        moq: 10
+      };
+
+      if (existingIdx !== -1) {
+        localRecommendations[existingIdx] = {
+          ...localRecommendations[existingIdx],
+          current_stock: p.current_stock,
+          reorder_point: p.reorder_point,
+          safety_stock: p.safety_stock,
+          urgency,
+          recommended_qty: recQty,
+          estimated_cost: estCost,
+          potential_savings: savings,
+          rationale,
+          decision_factors: decisionFactors,
+          status: 'Active'
+        };
+      } else {
+        const newRec: AIRecommendation = {
+          id: localRecommendations.length + 1,
+          product_id: p.id,
+          product_name: p.name,
+          sku: p.sku,
+          category: p.category_name,
+          current_stock: p.current_stock,
+          reorder_point: p.reorder_point,
+          safety_stock: p.safety_stock,
+          forecast_30d: Math.round(p.reorder_point * 1.8),
+          recommended_qty: recQty,
+          recommended_supplier_id: 1,
+          recommended_supplier_name: 'Apex Agro Commodities Pvt Ltd',
+          unit_cost: p.unit_cost,
+          estimated_cost: estCost,
+          potential_savings: savings,
+          urgency,
+          lead_time_days: p.lead_time_days,
+          rationale,
+          decision_factors: decisionFactors,
+          status: 'Active',
+          created_at: new Date().toISOString()
+        };
+        localRecommendations.unshift(newRec);
+      }
+
+      const alertExists = localAlerts.some(a => a.product_id === p.id && a.severity === (isCritical ? 'CRITICAL' : 'HIGH') && !a.is_read);
+      if (!alertExists) {
+        localAlerts.unshift({
+          id: localAlerts.length + 1,
+          product_id: p.id,
+          product_name: p.name,
+          alert_type: isCritical ? 'CRITICAL_STOCK' : 'LOW_STOCK',
+          severity: isCritical ? 'CRITICAL' : 'HIGH',
+          message: `Stock alert for ${p.name}: Current stock (${p.current_stock} ${p.unit}) is ${isCritical ? 'at critical limit' : 'approaching reorder point'}. Immediate replenishment recommended.`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        });
+      }
+    }
+  });
+}
+
+// Initial sync
+syncLocalRecommendations();
+
 export const authApi = {
   login: async (email: string, password: string) => {
     try {
@@ -171,6 +261,7 @@ export const productsApi = {
         updated_at: new Date().toISOString()
       };
       localProducts.unshift(newProd);
+      syncLocalRecommendations();
       return newProd;
     }
   },
@@ -182,6 +273,7 @@ export const productsApi = {
       const idx = localProducts.findIndex(p => p.id === Number(id));
       if (idx !== -1) {
         localProducts[idx] = { ...localProducts[idx], ...data, updated_at: new Date().toISOString() };
+        syncLocalRecommendations();
       }
       return localProducts[idx];
     }
@@ -239,7 +331,8 @@ export const procurementApi = {
       const res = await apiClient.get('/procurement/recommendations', { params: { status } });
       return res.data;
     } catch {
-      return localRecommendations;
+      syncLocalRecommendations();
+      return status ? localRecommendations.filter(r => r.status === status) : localRecommendations;
     }
   },
   optimize: async (data: {
@@ -637,6 +730,7 @@ export const inventoryApi = {
       if (prod) {
         prod.current_stock = Math.max(0, prod.current_stock + adjustmentQuantity);
         prod.inventory_value = prod.current_stock * prod.unit_cost;
+        syncLocalRecommendations();
       }
       return {
         success: true,

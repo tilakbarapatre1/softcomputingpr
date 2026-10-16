@@ -61,6 +61,11 @@ def adjust_stock(adj: StockAdjustment, db: Session = Depends(get_db)):
     prod.current_stock = new_stock
     db.commit()
 
+    # Trigger recommendation synchronization if stock is low or critical
+    if new_stock <= prod.reorder_point or new_stock <= prod.safety_stock:
+        from app.api.procurement import sync_active_recommendations
+        sync_active_recommendations(db)
+
     return {
         "status": "success",
         "message": f"Updated stock for {prod.name} to {new_stock} units.",
